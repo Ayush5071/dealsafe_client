@@ -9,6 +9,8 @@ export default function DashboardLayout({ children }) {
     { href: "/dashboard", label: "Overview", icon: "📊" },
     { href: "/dashboard/chat", label: "Legal Chatbot", icon: "💬" },
     { href: "/dashboard/upload", label: "Upload Contract", icon: "📄" },
+    { href: "/dashboard/ingest", label: "Ingest PDFs", icon: "📥" },
+    { href: "/dashboard/vectors", label: "Vectors", icon: "🧭" },
     { href: "/dashboard/profile", label: "Profile", icon: "👤" },
     { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
   ];
