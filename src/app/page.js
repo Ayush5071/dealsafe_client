@@ -1,65 +1,58 @@
-import Image from "next/image";
-
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
+    <div className="min-h-screen bg-black text-white">
+      {/* Hero Section */}
+      <section className="max-w-7xl mx-auto px-6 py-20">
+        <div className="text-center space-y-6">
+          <h1 className="text-6xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+            Protect Your Business Deals
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-xl text-zinc-400 max-w-3xl mx-auto">
+            AI-powered contract analysis for Indian law. Detect risky clauses, understand legal terms, and protect yourself from unfair agreements.
           </p>
+          <div className="flex gap-4 justify-center mt-8">
+            <a href="/dashboard" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 rounded-lg font-semibold transition-all">
+              Get Started Free
+            </a>
+            <a href="#features" className="border border-zinc-700 hover:border-zinc-500 text-white px-8 py-3 rounded-lg font-semibold transition-all">
+              Learn More
+            </a>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
+      </section>
+
+      {/* Features */}
+      <section id="features" className="max-w-7xl mx-auto px-6 py-20">
+        <h2 className="text-4xl font-bold text-center mb-12">Powerful Contract Analysis</h2>
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
+            <div className="text-3xl mb-4">🔍</div>
+            <h3 className="text-xl font-semibold mb-2">Clause Detection</h3>
+            <p className="text-zinc-400">Automatically identify payment, termination, liability, IP, and other critical clauses.</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
+            <div className="text-3xl mb-4">⚠️</div>
+            <h3 className="text-xl font-semibold mb-2">Risk Analysis</h3>
+            <p className="text-zinc-400">Get instant risk scores and detect predatory or one-sided terms under Indian law.</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
+            <div className="text-3xl mb-4">💬</div>
+            <h3 className="text-xl font-semibold mb-2">AI Chatbot</h3>
+            <p className="text-zinc-400">Ask questions about your contract and get instant, plain-language explanations.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="max-w-7xl mx-auto px-6 py-20 text-center">
+        <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border border-blue-800/50 rounded-2xl p-12">
+          <h2 className="text-4xl font-bold mb-4">Ready to Analyze Your Contracts?</h2>
+          <p className="text-zinc-300 mb-8">Upload your first contract and get a comprehensive risk analysis in seconds.</p>
+          <a href="/dashboard" className="inline-block bg-white text-black px-8 py-3 rounded-lg font-semibold hover:bg-zinc-200 transition-all">
+            Start Now
           </a>
         </div>
-      </main>
+      </section>
     </div>
   );
 }
