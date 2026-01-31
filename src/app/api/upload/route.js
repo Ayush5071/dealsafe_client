@@ -1,11 +1,26 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { extractTextFromPDF, chunkText, estimatePageNumber } from '@/lib/pdfParser';
+import { getServerSession } from 'next-auth';
+import { extractTextFromPDF, chunkText } from '@/lib/pdfParser';
 import { generateEmbeddings } from '@/lib/embeddings';
 import vectorDb from '@/lib/vectorDb';
-import { analyzeFile } from '@/lib/analyzer';
 import { classifyChunks } from '@/lib/clauseClassifier';
+import { uploadWorkflow } from '@/lib/workflows/uploadWorkflow';
+import { connectMongoose } from '@/lib/mongoose';
+import Feedback from '@/lib/models/Feedback';
+import { getUserProfile, ensureAdminSetup } from '@/lib/db';
+import { submitForExpertReview } from '@/lib/hilOrchestrator';
+import { analyzeFile } from '@/lib/analyzer';
+import { scrapeRelatedClauses } from '@/lib/firecrawlAgent';
+
+// Helper function to estimate page number from chunk position
+function estimatePageNumber(chunk, fullText, totalPages) {
+  const chunkPosition = fullText.indexOf(chunk);
+  if (chunkPosition === -1) return 1;
+  const ratio = chunkPosition / fullText.length;
+  return Math.max(1, Math.ceil(ratio * totalPages));
+}
 
 export async function POST(request) {
   try {
@@ -19,10 +34,11 @@ export async function POST(request) {
       );
     }
 
-    // Validate file type
-    if (file.type !== 'application/pdf') {
+    // Validate file type (allow PDF and DOCX)
+    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Only PDF files are allowed' },
+        { error: 'Only PDF and DOCX files are allowed' },
         { status: 400 }
       );
     }
@@ -89,13 +105,105 @@ export async function POST(request) {
 
     console.log('Upload processed and stored. Running analysis...');
 
-    // Run analysis on the newly uploaded file
+    // Get user session for parallel Firecrawl agent
+    const session = await getServerSession();
+    const userEmail = session?.user?.email;
+
+    // Run analysis and Firecrawl scraping in parallel (only if user is logged in)
     let analysis = null;
+    let scrapedClauses = [];
     let deletedUpload = false;
+    let uploadResultExpert = null;
+
     try {
-      analysis = await analyzeFile(uniqueName);
-    } catch (err) {
-      console.error('Analysis failed:', err);
+      const promises = [analyzeFile(uniqueName)];
+
+      if (userEmail) {
+        console.log('User logged in, starting parallel Firecrawl agent...');
+        promises.push(scrapeRelatedClauses(text));
+      }
+
+      const results = await Promise.all(promises);
+
+      const analyzeResult = results[0] || {};
+      analysis = analyzeResult?.analysis || null;
+      const external_contexts = analyzeResult?.external_contexts || [];
+
+      if (userEmail && results[1]) {
+        scrapedClauses = results[1];
+        console.log(`Firecrawl agent found ${scrapedClauses.length} related clauses`);
+      }
+
+      // HIL is OPTIONAL: only submitted when client requests it via form field 'useHIL' or header 'x-use-hil'
+      try {
+        const useHIL = (form && typeof form.get === 'function' && (form.get('useHIL') === 'true' || form.get('useHIL') === '1')) || (request.headers?.get('x-use-hil') === 'true');
+        // Explicit feedback creation must be requested by client to avoid auto-creating records
+        const createFeedback = (form && typeof form.get === 'function' && (form.get('createFeedback') === 'true' || form.get('createFeedback') === '1')) || (request.headers?.get('x-create-feedback') === 'true');
+
+        if (useHIL && userEmail && analysis) {
+          await connectMongoose();
+          await ensureAdminSetup();
+
+          const hilResult = await submitForExpertReview(
+            analysis,
+            userEmail,
+            'upload',
+            {
+              documentName: uniqueName,
+              document_text: text,
+              chunks_processed: result.count,
+              pages: numPages,
+              scraped_clauses: scrapedClauses,
+              external_contexts: analyzeResult?.external_contexts || [],
+              user_role: (await getUserProfile(userEmail))?.role || 'unknown'
+            }
+          );
+
+          uploadResultExpert = {
+            hil_mandatory: true,
+            hil_id: hilResult.hil_id,
+            analysis_id: hilResult.analysis_id,
+            status: hilResult.status,
+            message: hilResult.message,
+            estimated_review_time: hilResult.estimated_review_time
+          };
+
+          // Hide analysis until expert approves
+          analysis = null;
+        } else if (createFeedback) {
+          // Only create a non-blocking feedback record if explicitly requested by client
+          try {
+            await connectMongoose();
+            const defaultAdmin = (process.env.DEFAULT_ADMIN_EMAILS || 'ayusht5071@gmail.com').split(',')[0].trim().toLowerCase();
+            await ensureAdminSetup(defaultAdmin);
+
+            const fb = new Feedback({
+              analysisId: `upload_${Date.now()}`,
+              type: 'upload',
+              documentName: uniqueName,
+              userEmail: userEmail || 'anonymous',
+              expertEmail: defaultAdmin,
+              originalAnalysis: analysis || {},
+              payload: { document_text: text },
+              status: 'pending'
+            });
+            await fb.save();
+            const pendingFeedbackId = fb._id;
+            try {
+              const { storeFeedbackEmbedding } = await import('@/lib/feedbackEmbeddings');
+              storeFeedbackEmbedding(fb).catch((e) => console.warn('storeFeedbackEmbedding error:', e));
+            } catch (e) {
+              console.warn('Failed to queue feedback embedding:', e?.message || e);
+            }
+          } catch (e) {
+            console.warn('Failed to create explicit feedback record:', e?.message || e);
+          }
+        } else {
+          // No HIL and no explicit feedback requested: do nothing (no auto feedback creation)
+        }
+      } catch (e) {
+        console.warn('HIL processing error (non-fatal):', e?.message || e);
+      }
     } finally {
       // Remove the uploaded PDF from uploads/ for security after analysis attempt
       try {
@@ -116,7 +224,11 @@ export async function POST(request) {
       pages: numPages,
       message: 'PDF uploaded and processed successfully',
       analysis,
+      external_contexts: (typeof external_contexts !== 'undefined' ? external_contexts : []),
+      scraped_clauses: scrapedClauses,
       deleted_upload: deletedUpload,
+      ...(uploadResultExpert || {}),
+      ...(typeof pendingFeedbackId !== 'undefined' ? { pending_feedback_id: pendingFeedbackId } : {})
     });
   } catch (error) {
     console.error('Error uploading PDF:', error);

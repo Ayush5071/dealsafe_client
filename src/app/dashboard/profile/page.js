@@ -62,7 +62,35 @@ export default function ProfilePage() {
             <p className="text-blue-400 mt-1">Role: {role || 'Not set'}</p>
           </div>
         </div>
-      </div>
+
+        {/* Claim Admin/Expert Access for default admins */}
+
+        {!profile?.isAdmin && !profile?.isExpert && (
+          <div className="bg-yellow-900/10 border border-yellow-800 rounded p-4 mb-6">
+            <p className="text-yellow-200 text-sm mb-3">If you are listed as a default admin email and don't have admin privileges yet, click below to claim admin/expert access.</p>
+            <p className="text-yellow-200 text-xs mb-3">Authorized admin emails: <strong className="text-white">{(process.env.NEXT_PUBLIC_DEFAULT_ADMIN_EMAILS || process.env.DEFAULT_ADMIN_EMAILS || 'Not configured')}</strong></p>
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/admin/promote-me', { method: 'POST' });
+                  if (!res.ok) {
+                    const j = await res.json().catch(() => ({}));
+                    alert('Failed to claim admin access: ' + (j.error || res.status));
+                    return;
+                  }
+                  alert('Admin & Expert privileges granted. Refreshing profile...');
+                  const r = await fetch('/api/user/profile');
+                  const j = await r.json();
+                  setProfile(j.profile || {});
+                } catch (e) {
+                  console.error('Claim admin error:', e);
+                  alert('Failed to claim admin access');
+                }
+              }}
+              className="px-4 py-2 bg-yellow-600 text-black rounded"
+            >Claim Admin / Expert Access</button>
+          </div>
+        )}
 
       <form onSubmit={handleSave} className="bg-zinc-900 p-6 rounded-lg space-y-6">
         <h2 className="text-xl font-semibold mb-4">Complete Your Profile</h2>
@@ -209,6 +237,7 @@ export default function ProfilePage() {
           </div>
         )}
       </form>
+      </div>
     </div>
   );
 }

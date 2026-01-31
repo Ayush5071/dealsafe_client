@@ -22,6 +22,8 @@ export default function VectorsPage() {
   useEffect(() => { fetchStats(); }, []);
 
   const [predatoryList, setPredatoryList] = useState(null);
+  const [embedList, setEmbedList] = useState(null);
+  const [embedLoading, setEmbedLoading] = useState(false);
 
   async function handleDelete(source) {
     if (!confirm(`Delete vectors for ${source}? This is irreversible.`)) return;
@@ -56,6 +58,25 @@ export default function VectorsPage() {
     }
   }
 
+  async function fetchEmbeddings(source) {
+    setActionMsg(null);
+    setEmbedList(null);
+    setEmbedLoading(true);
+    try {
+      const res = await fetch(`/api/vectors/embeddings?source=${encodeURIComponent(source)}`);
+      const j = await res.json();
+      if (j.success) {
+        setEmbedList({ source, items: j.vectors });
+      } else {
+        setActionMsg({ error: j.error || 'Failed' });
+      }
+    } catch (err) {
+      setActionMsg({ error: String(err) });
+    } finally {
+      setEmbedLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Vector DB — Sources</h2>
@@ -84,7 +105,8 @@ export default function VectorsPage() {
                   <td>{s.predatory_count ?? 0}</td>
                   <td>
                     <button onClick={() => handleDelete(s.source)} className="px-2 py-1 bg-red-600 rounded text-white mr-2">Delete</button>
-                    <button onClick={() => fetchPredatory(s.source)} className="px-2 py-1 bg-yellow-600 rounded text-black">View Predatory Clauses</button>
+                    <button onClick={() => fetchPredatory(s.source)} className="px-2 py-1 bg-yellow-600 rounded text-black mr-2">View Predatory Clauses</button>
+                    <button onClick={() => fetchEmbeddings(s.source)} className="px-2 py-1 bg-green-600 rounded text-white">View Embeddings</button>
                   </td>
                 </tr>
               ))}
@@ -107,6 +129,26 @@ export default function VectorsPage() {
                   </li>
                 ))}
               </ul>
+            )}
+          </div>
+        )}
+
+        {embedList && (
+          <div className="mt-6 bg-zinc-800 p-4 rounded border border-zinc-700">
+            <h4 className="font-semibold mb-2">Embeddings for {embedList.source} (showing up to 10)</h4>
+            {embedLoading ? (
+              <div className="text-zinc-400">Loading embeddings...</div>
+            ) : (
+              <div className="space-y-3">
+                {embedList.items.slice(0, 10).map((it, idx) => (
+                  <div key={idx} className="border-t border-zinc-700 pt-2">
+                    <div className="text-sm"><strong>Chunk:</strong> {it.chunkId}</div>
+                    <div className="text-xs text-zinc-300 mt-1">{it.text.slice(0, 200)}</div>
+                    <div className="text-xs text-zinc-400 mt-1"><strong>VectorLen:</strong> {it.vector?.length || 'N/A'}</div>
+                    <div className="text-xs text-zinc-400 mt-1"><strong>Tags:</strong> {it.tags ? JSON.stringify(it.tags) : 'None'}</div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}

@@ -11,20 +11,32 @@ export default function DashboardLayout({ children }) {
   const [roleLoading, setRoleLoading] = useState(true);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState('Freelancer');
+  const [isExpert, setIsExpert] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const navItems = [
     { href: "/dashboard", label: "Overview", icon: "📊" },
     { href: "/dashboard/chat", label: "Legal Chatbot", icon: "💬" },
     { href: "/dashboard/upload", label: "Upload Contract", icon: "📄" },
+    { href: "/dashboard/hil-upload", label: "HIL Upload", icon: "🔄" },
     { href: "/dashboard/ingest", label: "Ingest PDFs", icon: "📥" },
     { href: "/dashboard/vectors", label: "Vectors", icon: "🧭" },
-    { href: "/dashboard/compare", label: "Compare Offers", icon: "⚖️", rolesOnly: ['Freelancer', 'Corporate Employee'] },
     { href: "/dashboard/resume", label: "Resume Screening", icon: "🧾", rolesOnly: ['HR Professional', 'Recruiter'] },
+    { href: "/dashboard/offer-comparison", label: "Offer Comparison", icon: "⚖️", rolesOnly: ['Corporate Employee'] },
+    { href: "/dashboard/ai-training", label: "AI Training", icon: "🤖", adminOnly: true },
+    { href: "/dashboard/train", label: "Training", icon: "🎯", expertOnly: true },
+    { href: "/dashboard/my-reviews", label: "My Reviews", icon: "📝" },
+    { href: "/dashboard/admin", label: "Admin Panel", icon: "🔑", adminOnly: true },
     { href: "/dashboard/profile", label: "Profile", icon: "👤" },
     { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
   ];
 
-  const visibleNavItems = navItems.filter(item => !item.rolesOnly || (role && item.rolesOnly.includes(role)));
+  const visibleNavItems = navItems.filter(item => {
+    if (item.expertOnly) return isExpert;
+    if (item.adminOnly) return isAdmin;
+    if (item.rolesOnly) return role && item.rolesOnly.includes(role);
+    return true;
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -40,8 +52,12 @@ export default function DashboardLayout({ children }) {
         const json = await res.json();
         if (mounted) {
           setRole(json.role);
+          setIsExpert(json.isExpert || false);
+          setIsAdmin(json.isAdmin || false);
           setShowRoleModal(!json.role);
         }
+
+
       } catch (err) {
         console.error('Error fetching role', err);
       } finally {
@@ -75,11 +91,10 @@ export default function DashboardLayout({ children }) {
             <li key={item.href}>
               <Link
                 href={item.href}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                  pathname === item.href
-                    ? "bg-blue-600 text-white"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
+                className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${pathname === item.href
+                  ? "bg-blue-600 text-white"
+                  : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                  }`}
               >
                 <span>{item.icon}</span>
                 <span>{item.label}</span>
@@ -111,6 +126,7 @@ export default function DashboardLayout({ children }) {
               <option>Startup Founder</option>
               <option>HR Professional</option>
               <option>Recruiter</option>
+              <option>Expert</option>
             </select>
             <div className="flex gap-3 justify-end">
               <button className="px-3 py-2 bg-zinc-700 rounded" onClick={() => setShowRoleModal(false)}>Cancel</button>

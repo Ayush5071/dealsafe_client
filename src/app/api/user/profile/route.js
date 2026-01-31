@@ -21,7 +21,19 @@ export async function POST(req) {
     if (!token?.email) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 
     const body = await req.json();
-    await updateUserProfile(token.email, body);
+
+    // Prevent non-admin users from setting admin/expert flags on themselves
+    const profile = await getUserProfile(token.email);
+    const isAdmin = profile?.isAdmin;
+
+    const sanitized = { ...body };
+    if (!isAdmin) {
+      delete sanitized.isAdmin;
+      delete sanitized.isExpert;
+      delete sanitized.expert;
+    }
+
+    await updateUserProfile(token.email, sanitized);
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('POST /api/user/profile error', err);

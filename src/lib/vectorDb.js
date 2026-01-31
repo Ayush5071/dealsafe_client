@@ -153,6 +153,19 @@ class VectorDB {
     }
   }
 
+  async getVectorsWithEmbeddings(source) {
+    await this.initialize();
+    try {
+      const rows = source
+        ? this.db.prepare('SELECT id, vector, text, source, chunkId, page, tags FROM documents WHERE source = ?').all(source)
+        : this.db.prepare('SELECT id, vector, text, source, chunkId, page, tags FROM documents').all();
+      return rows.map((r) => ({ id: r.id, vector: JSON.parse(r.vector), text: r.text, source: r.source, chunkId: r.chunkId, page: r.page, tags: JSON.parse(r.tags || '{}') }));
+    } catch (error) {
+      console.error('Error getting vectors with embeddings from SQLite:', error);
+      throw error;
+    }
+  }
+
   async getSourceStats() {
     await this.initialize();
     try {

@@ -2,11 +2,32 @@
 import Link from "next/link";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 
 export default function NavBar() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const isLanding = pathname === "/";
+  const [isExpert, setIsExpert] = useState(false);
+
+  useEffect(() => {
+    async function checkExpertStatus() {
+      if (session?.user?.email) {
+        try {
+          const response = await fetch('/api/user/profile');
+          if (response.ok) {
+            const data = await response.json();
+            const profile = data.profile || {};
+            setIsExpert(profile?.expert || profile?.isExpert || false);
+          }
+        } catch (error) {
+          console.error('Failed to check expert status:', error);
+        }
+      }
+    }
+
+    checkExpertStatus();
+  }, [session?.user?.email]);
 
   return (
     <nav className="w-full bg-black/95 backdrop-blur-sm border-b border-zinc-800 text-white px-6 py-4 sticky top-0 z-50">
@@ -20,6 +41,11 @@ export default function NavBar() {
               <Link href="/dashboard" className="text-sm text-zinc-400 hover:text-white transition-colors">
                 Dashboard
               </Link>
+              {isExpert && (
+                <Link href="/dashboard/train" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
+                  Training
+                </Link>
+              )}
             </>
           )}
         </div>

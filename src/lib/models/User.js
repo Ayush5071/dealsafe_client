@@ -8,12 +8,17 @@ const ALLOWED_ROLES = [
   'Startup Founder',
   'HR Professional',
   'Recruiter',
+  'Expert',
 ];
 
 const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, index: true },
   name: { type: String },
   role: { type: String, enum: ALLOWED_ROLES, default: null },
+  isAdmin: { type: Boolean, default: false },
+  isExpert: { type: Boolean, default: false },
+  // Backwards-compatible alias: some places refer to `expert` instead of `isExpert`
+  expert: { type: Boolean, default: false },
 
   // Freelancer fields
   totalEarnings: { type: Number },
