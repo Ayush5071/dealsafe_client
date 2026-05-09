@@ -108,6 +108,14 @@ export async function POST(request) {
     // Get user session for parallel Firecrawl agent
     const session = await getServerSession();
     const userEmail = session?.user?.email;
+    let userRole = 'unknown';
+
+    if (userEmail) {
+      const profile = await getUserProfile(userEmail);
+      if (profile && profile.role) {
+        userRole = profile.role;
+      }
+    }
 
     // Run analysis and Firecrawl scraping in parallel (only if user is logged in)
     let analysis = null;
@@ -116,7 +124,7 @@ export async function POST(request) {
     let uploadResultExpert = null;
 
     try {
-      const promises = [analyzeFile(uniqueName)];
+      const promises = [analyzeFile(uniqueName, userRole)];
 
       if (userEmail) {
         console.log('User logged in, starting parallel Firecrawl agent...');

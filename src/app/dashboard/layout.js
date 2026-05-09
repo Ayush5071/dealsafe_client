@@ -17,6 +17,7 @@ export default function DashboardLayout({ children }) {
   const navItems = [
     { href: "/dashboard", label: "Overview", icon: "📊" },
     { href: "/dashboard/chat", label: "Legal Chatbot", icon: "💬" },
+    { href: "/dashboard/voice-chat", label: "Voice Agent", icon: "🎙️" },
     { href: "/dashboard/upload", label: "Upload Contract", icon: "📄" },
     { href: "/dashboard/hil-upload", label: "HIL Upload", icon: "🔄" },
     { href: "/dashboard/ingest", label: "Ingest PDFs", icon: "📥" },

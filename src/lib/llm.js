@@ -96,7 +96,7 @@ export class GeminiClient {
       }
 
       const analysis = JSON.parse(jsonMatch[0]);
-      
+
       // Validate against schema if provided
       if (schema) {
         schema.parse(analysis);

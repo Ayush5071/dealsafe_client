@@ -16,21 +16,22 @@ export function isSpeechRecognitionSupported() {
  */
 export class SpeechToText {
     constructor() {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-        if (!SpeechRecognition) {
-            throw new Error('Speech recognition not supported in this browser');
+        if (typeof window !== 'undefined') {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = true;
+                this.recognition.interimResults = true;
+                this.recognition.lang = 'en-US';
+            }
         }
-
-        this.recognition = new SpeechRecognition();
-        this.recognition.continuous = false;
-        this.recognition.interimResults = true;
-        this.recognition.lang = 'en-US';
 
         this.isListening = false;
         this.onResult = null;
         this.onError = null;
         this.onEnd = null;
+        this.silenceTimer = null;
+        this.finalTranscript = '';
     }
 
     setLanguage(lang) {
@@ -50,38 +51,63 @@ export class SpeechToText {
             'ko': 'ko-KR'
         };
 
-        this.recognition.lang = langMap[lang] || 'en-US';
+        if (this.recognition) {
+            this.recognition.lang = langMap[lang] || 'en-US';
+        }
     }
 
     start(onResult, onError, onEnd) {
+        if (!this.recognition) {
+            if (onError) onError('Speech recognition not supported');
+            return;
+        }
+
         this.onResult = onResult;
         this.onError = onError;
         this.onEnd = onEnd;
+        this.finalTranscript = '';
 
         this.recognition.onresult = (event) => {
-            const transcript = Array.from(event.results)
-                .map(result => result[0].transcript)
-                .join('');
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    this.finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
 
-            const isFinal = event.results[event.results.length - 1].isFinal;
+            const currentFullTranscript = this.finalTranscript + interimTranscript;
 
             if (this.onResult) {
-                this.onResult(transcript, isFinal);
+                this.onResult(currentFullTranscript, false);
+            }
+
+            if (this.silenceTimer) clearTimeout(this.silenceTimer);
+
+            if (currentFullTranscript.trim().length > 0) {
+                this.silenceTimer = setTimeout(() => {
+                    this.stop();
+                    if (this.onResult) {
+                        this.onResult(this.finalTranscript || currentFullTranscript, true);
+                    }
+                }, 2000);
             }
         };
 
         this.recognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
-            if (this.onError) {
-                this.onError(event.error);
+            if (event.error === 'no-speech') {
+                // ignore
+            } else {
+                console.error('Speech recognition error:', event.error);
+                if (this.onError) this.onError(event.error);
             }
         };
 
         this.recognition.onend = () => {
+            if (this.silenceTimer) clearTimeout(this.silenceTimer);
             this.isListening = false;
-            if (this.onEnd) {
-                this.onEnd();
-            }
+            if (this.onEnd) this.onEnd();
         };
 
         try {
@@ -89,14 +115,13 @@ export class SpeechToText {
             this.isListening = true;
         } catch (error) {
             console.error('Failed to start recognition:', error);
-            if (this.onError) {
-                this.onError(error.message);
-            }
+            if (this.onError) this.onError(error.message);
         }
     }
 
     stop() {
-        if (this.isListening) {
+        if (this.isListening && this.recognition) {
+            if (this.silenceTimer) clearTimeout(this.silenceTimer);
             this.recognition.stop();
             this.isListening = false;
         }
@@ -114,7 +139,6 @@ export class TextToSpeech {
 
     async speak(text, language = 'en') {
         try {
-            // Call our TTS API
             const response = await fetch('/api/tts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -128,10 +152,7 @@ export class TextToSpeech {
             const audioBlob = await response.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
 
-            // Stop any currently playing audio
             this.stop();
-
-            // Play the audio
             this.currentAudio = new Audio(audioUrl);
 
             return new Promise((resolve, reject) => {
@@ -194,7 +215,7 @@ export class SpeechToSpeechAgent {
     }
 
     async greet() {
-        const greeting = "Hello, my name is Lawyer Sam. How can I help you today?";
+        const greeting = "Hello, I am ready to help you with your contracts. What would you like to know?";
         try {
             await this.tts.speak(greeting, this.language);
         } catch (error) {
@@ -202,51 +223,97 @@ export class SpeechToSpeechAgent {
         }
     }
 
-    async startListening(onTranscript, onResponse, onError, skipGreeting = false) {
+    // New version accepting an object for better flexibility
+    async startListening(params) {
+        // Handle legacy call signature (arguments: onTranscript, onResponse, onError, skipGreeting)
+        if (typeof params === 'function') {
+            const [onTranscript, onResponse, onError, skipGreeting] = arguments;
+            params = { onTranscript, onResponse, onError, skipGreeting, continuous: false };
+        }
+
+        const {
+            onTranscript,
+            onResponse,
+            onError,
+            onStatusChange, // new callback: (status: 'listening' | 'processing' | 'speaking') => void
+            skipGreeting = false,
+            continuous = false
+        } = params;
+
+        this.shouldContinue = continuous;
+
         if (!this.stt) {
             if (onError) onError('Speech recognition not supported');
             return;
         }
 
-        // Play greeting first if not skipped
         if (!skipGreeting) {
             try {
+                if (onStatusChange) onStatusChange('speaking');
                 await this.greet();
             } catch (error) {
                 console.warn('Greeting failed, continuing anyway:', error);
             }
         }
 
-        this.stt.start(
-            async (transcript, isFinal) => {
-                if (onTranscript) {
-                    onTranscript(transcript, isFinal);
-                }
+        const runTurn = () => {
+            if (!this.shouldContinue && params._isRecursive) return; // Stop if cancelled
 
-                if (isFinal) {
-                    try {
-                        // Process with Qwen
-                        const response = await this.processWithLLM(transcript);
+            if (onStatusChange) onStatusChange('listening');
 
-                        if (onResponse) {
-                            onResponse(response);
-                        }
+            this.stt.start(
+                async (transcript, isFinal) => {
+                    if (onTranscript) {
+                        onTranscript(transcript, isFinal);
+                    }
 
-                        // Speak the response
-                        await this.tts.speak(response, this.language);
-                    } catch (error) {
-                        console.error('Processing error:', error);
-                        if (onError) {
-                            onError(error.message);
+                    if (isFinal) {
+                        try {
+                            if (onStatusChange) onStatusChange('processing');
+
+                            const response = await this.processWithLLM(transcript);
+
+                            if (onResponse) {
+                                onResponse(response);
+                            }
+
+                            if (onStatusChange) onStatusChange('speaking');
+                            await this.tts.speak(response, this.language);
+
+                            // Prepare for next turn if continuous
+                            if (this.shouldContinue) {
+                                // Recursive call for next turn
+                                // We pass _isRecursive to avoid re-greeting or re-setting flags unnecessarily
+                                // But simpler is just to loop logic. 
+                                // Since stt.start is callback based, we just call runTurn() again.
+                                runTurn();
+                            } else {
+                                if (onStatusChange) onStatusChange('idle');
+                            }
+
+                        } catch (error) {
+                            console.error('Processing error:', error);
+                            if (onError) {
+                                onError(error.message);
+                            }
+                            if (onStatusChange) onStatusChange('error');
                         }
                     }
+                },
+                onError,
+                () => {
+                    console.log('Speech recognition ended');
                 }
-            },
-            onError,
-            () => {
-                console.log('Speech recognition ended');
-            }
-        );
+            );
+        };
+
+        runTurn();
+    }
+
+    stopSession() {
+        this.shouldContinue = false;
+        this.stopListening();
+        this.stopSpeaking();
     }
 
     stopListening() {
@@ -266,24 +333,37 @@ export class SpeechToSpeechAgent {
             content: userInput
         });
 
-        // Keep only last 10 messages
-        if (this.conversationHistory.length > 10) {
-            this.conversationHistory = this.conversationHistory.slice(-10);
+        if (this.conversationHistory.length > 6) {
+            this.conversationHistory = this.conversationHistory.slice(-6);
         }
 
-        // Process with Qwen
-        const response = await ollamaClient.chat(
-            this.conversationHistory,
-            'You are a helpful legal assistant. Provide concise, clear answers suitable for voice conversation. Keep responses under 3 sentences when possible.'
-        );
+        try {
+            const res = await fetch('/api/voice-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    question: userInput,
+                    conversationHistory: this.conversationHistory
+                })
+            });
 
-        // Add response to history
-        this.conversationHistory.push({
-            role: 'assistant',
-            content: response
-        });
+            if (!res.ok) throw new Error("Voice chat API failed");
 
-        return response;
+            const json = await res.json();
+            const response = json.answer || "I'm sorry, I couldn't find an answer.";
+
+            // Add response to history
+            this.conversationHistory.push({
+                role: 'assistant',
+                content: response
+            });
+
+            return response;
+
+        } catch (err) {
+            console.error("LLM Process error", err);
+            return "I am having trouble connecting to the server. Please try again.";
+        }
     }
 
     clearHistory() {

@@ -22,6 +22,7 @@
     "elevenlabs": "^1.59.0",
     "file-saver": "^2.0.5",
     "html-to-docx": "^1.8.0",
+    "jspdf": "^4.0.0",
     "langchain": "^1.2.16",
     "libretranslate": "^1.0.1",
     "mammoth": "^1.4.20",

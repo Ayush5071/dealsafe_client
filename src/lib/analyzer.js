@@ -5,7 +5,7 @@ import { CONFIG } from './config';
 import { generateHILAwarePrompt } from './hilTraining';
 
 // Analyze a file by filename (source in vector DB)
-export async function analyzeFile(filename, language = 'en') {
+export async function analyzeFile(filename, userRole = '', language = 'en') {
   // Retrieve chunks
   const chunks = await vectorDb.getAllBySource(filename);
   if (!chunks || chunks.length === 0) {
@@ -81,11 +81,19 @@ export async function analyzeFile(filename, language = 'en') {
     ? `\n\nIMPORTANT: Provide the entire analysis output in ${languageName}. Translate all fields including summary, descriptions, recommendations, and clause text to ${languageName}.`
     : '';
 
+  // Role-specific bias instructions
+  let roleInstruction = '';
+  if (userRole === 'Freelancer') {
+    roleInstruction = `\n\nCRITICAL ROLE INSTRUCTION: You are acting as a zealous advocate for the FREELANCER (developer). Your goal is to maximize their benefits, earnings, and protection. Explicitly IGNORE any concerns about client exploitation or fairness to the client. Focus ONLY on protecting the freelancer. Highlight any clause that limits the freelancer's rights or income as CRITICAL risk.`;
+  } else if (userRole === 'Agency') {
+    roleInstruction = `\n\nCRITICAL ROLE INSTRUCTION: You are acting as a strategic advisor for the AGENCY. Your goal is to maximize the agency's profit, control, and leverage. Prioritize the agency's interests over individual developers or clients. Focus on scalability, margin protection, and ownership of IP. Highlight any clause that reduces agency control as HIGH risk.`;
+  }
+
   // Build India-centric analysis prompt
-  const analysisPrompt = `You are a legal contract analysis engine focused on Indian law (Indian Contract Act, 1872 and relevant principles). Analyze the following contract text and return a STRICT JSON object that conforms to the schema described below. Do NOT include any text outside the JSON object.\n\nREQUIREMENTS:\n- Segment the contract into clauses and name each clause (clause_name).\n- For each clause, classify into categories (payment, termination, liability, IP, confidentiality, assignment, indemnity, limitation of liability, dispute resolution, jurisdiction, miscellaneous).\n- For each clause, give: clause_text (if available), category, risk_level (low/medium/high/critical), risk_score (0-100), concise description, recommendations, optional india_laws (list of relevant sections/principles), and a rewrite_suggestion for safer wording.\n- Detect predatory or unenforceable clauses under Indian law and calculate a predatory_index (0-100).\n- Provide missing_clauses (list of recommended clauses), negotiation_questions to ask, an overall final_score (0-100), trust_score (0-100), a short summary, and top-level recommendations.${languageInstruction}\n\nCONTEXT:\n${finalContext}\n\nOUTPUT: A single JSON object matching the ContractAnalysisSchema. Use arrays and numbers, do not include commentary.`;
+  const analysisPrompt = `You are a legal contract analysis engine focused on Indian law (Indian Contract Act, 1872 and relevant principles).${roleInstruction} Analyze the following contract text and return a STRICT JSON object that conforms to the schema described below. Do NOT include any text outside the JSON object.\n\nREQUIREMENTS:\n- Segment the contract into clauses and name each clause (clause_name).\n- For each clause, classify into categories (payment, termination, liability, IP, confidentiality, assignment, indemnity, limitation of liability, dispute resolution, jurisdiction, miscellaneous).\n- For each clause, give: clause_text (if available), category, risk_level (low/medium/high/critical), risk_score (0-100), concise description, recommendations, optional india_laws (list of relevant sections/principles), and a rewrite_suggestion for safer wording.\n- Detect predatory or unenforceable clauses under Indian law and calculate a predatory_index (0-100).\n- Provide missing_clauses (list of recommended clauses), negotiation_questions to ask, an overall final_score (0-100), trust_score (0-100), a short summary, and top-level recommendations.${languageInstruction}\n\nCONTEXT:\n${finalContext}\n\nOUTPUT: A single JSON object matching the ContractAnalysisSchema. Use arrays and numbers, do not include commentary.`;
 
   // Strict analysis prompt (India-only, context-only)
-  const analysisPromptStrict = `CRITICAL RULES:\n1. Use ONLY the information contained in the CONTEXT below. If any question or requirement cannot be answered from the context, respond exactly with the string: "I don't know".\n2. Focus ONLY on Indian law (Indian Contract Act, 1872 and related principles). Map clause risks precisely to Indian legal principles and explain why.\n3. Output exactly one strict JSON object and nothing else that conforms to the ContractAnalysisSchema.${languageInstruction}\n\nYou are a legal contract analysis engine focused on Indian law. Analyze the following contract text and return a STRICT JSON object that conforms to the schema described below. Do NOT include any text outside the JSON object.\n\nCONTEXT:\n${finalContext}\n\nOUTPUT: A single JSON object matching the ContractAnalysisSchema. Use arrays and numbers, do not include commentary.`;
+  const analysisPromptStrict = `CRITICAL RULES:\n1. Use ONLY the information contained in the CONTEXT below. If any question or requirement cannot be answered from the context, respond exactly with the string: "I don't know".\n2. Focus ONLY on Indian law (Indian Contract Act, 1872 and related principles). Map clause risks precisely to Indian legal principles and explain why.\n3. Output exactly one strict JSON object and nothing else that conforms to the ContractAnalysisSchema.${roleInstruction}${languageInstruction}\n\nYou are a legal contract analysis engine focused on Indian law. Analyze the following contract text and return a STRICT JSON object that conforms to the schema described below. Do NOT include any text outside the JSON object.\n\nCONTEXT:\n${finalContext}\n\nOUTPUT: A single JSON object matching the ContractAnalysisSchema. Use arrays and numbers, do not include commentary.`;
 
   // Try Gemini first (if available), but fall back to Ollama on any failure
   if (geminiClient && geminiClient.available) {
@@ -185,8 +193,16 @@ export async function analyzeText(documentText, documentName = 'text_doc', userR
     console.warn('Failed to fetch external contexts for analyzer (text):', err);
   }
 
+  // Role-specific bias instructions
+  let roleInstruction = '';
+  if (userRole === 'Freelancer') {
+    roleInstruction = `\n\nCRITICAL ROLE INSTRUCTION: You are acting as a zealous advocate for the FREELANCER (developer). Your goal is to maximize their benefits, earnings, and protection. Explicitly IGNORE any concerns about client exploitation or fairness to the client. Focus ONLY on protecting the freelancer. Highlight any clause that limits the freelancer's rights or income as CRITICAL risk.`;
+  } else if (userRole === 'Agency') {
+    roleInstruction = `\n\nCRITICAL ROLE INSTRUCTION: You are acting as a strategic advisor for the AGENCY. Your goal is to maximize the agency's profit, control, and leverage. Prioritize the agency's interests over individual developers or clients. Focus on scalability, margin protection, and ownership of IP. Highlight any clause that reduces agency control as HIGH risk.`;
+  }
+
   // Build the same strict prompt as analyzeFile
-  const analysisPromptStrict = `CRITICAL RULES:\n1. Use ONLY the information contained in the CONTEXT below. If any question or requirement cannot be answered from the context, respond exactly with the string: "I don't know".\n2. Focus ONLY on Indian law (Indian Contract Act, 1872 and related principles). Map clause risks precisely to Indian legal principles and explain why.\n3. Output exactly one strict JSON object and nothing else that conforms to the ContractAnalysisSchema.\n\nYou are a legal contract analysis engine focused on Indian law. Analyze the following contract text and return a STRICT JSON object that conforms to the schema described below. Do NOT include any text outside the JSON object.\n\nCONTEXT:\n${finalContext}\n\nOUTPUT: A single JSON object matching the ContractAnalysisSchema. Use arrays and numbers, do not include commentary.`;
+  const analysisPromptStrict = `CRITICAL RULES:\n1. Use ONLY the information contained in the CONTEXT below. If any question or requirement cannot be answered from the context, respond exactly with the string: "I don't know".\n2. Focus ONLY on Indian law (Indian Contract Act, 1872 and related principles). Map clause risks precisely to Indian legal principles and explain why.\n3. Output exactly one strict JSON object and nothing else that conforms to the ContractAnalysisSchema.${roleInstruction}\n\nYou are a legal contract analysis engine focused on Indian law. Analyze the following contract text and return a STRICT JSON object that conforms to the schema described below. Do NOT include any text outside the JSON object.\n\nCONTEXT:\n${finalContext}\n\nOUTPUT: A single JSON object matching the ContractAnalysisSchema. Use arrays and numbers, do not include commentary.`;
 
   // Try Gemini first (if available), fallback to Ollama
   if (geminiClient && geminiClient.available) {

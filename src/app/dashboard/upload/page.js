@@ -230,13 +230,41 @@ export default function UploadPage() {
     }
   }
 
+  const [simpleExplanation, setSimpleExplanation] = useState(null);
+  const [loadingSimple, setLoadingSimple] = useState(false);
+
+  // ... existing functions ...
+
+  // Explain like a child handler
+  async function handleExplainLikeChild() {
+    if (!analysis || !analysis.summary) return;
+    setLoadingSimple(true);
+    try {
+      const res = await fetch('/api/explain-simple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: analysis.summary }),
+      });
+      const data = await res.json();
+      if (data.simpleText) {
+        setSimpleExplanation(data.simpleText);
+      }
+    } catch (err) {
+      console.error('Explain error:', err);
+    } finally {
+      setLoadingSimple(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
+      {/* ... keeping existing header ... */}
       <div>
         <h2 className="text-2xl font-bold mb-2">Upload Contract</h2>
         <p className="text-zinc-400">Upload a PDF contract for AI-powered analysis</p>
       </div>
 
+      {/* ... keeping form ... */}
       <form onSubmit={handleUpload} className="bg-zinc-900 border border-zinc-800 p-8 rounded-xl space-y-6">
         <div>
           <label className="block text-sm font-medium mb-2">Select PDF Contract</label>
@@ -376,29 +404,61 @@ export default function UploadPage() {
         <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl mt-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold">Analysis</h3>
-            {analysis.summary && (
-              <button
-                onClick={handleListenToAnalysis}
-                disabled={isGeneratingAudio}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-700 text-white rounded-lg transition-colors"
-              >
-                {isGeneratingAudio ? (
-                  <>
-                    <span className="animate-spin">⚙️</span>
-                    Generating Audio...
-                  </>
-                ) : isPlaying ? (
-                  <>
-                    🔊 Playing...
-                  </>
-                ) : (
-                  <>
-                    🎧 Listen to Summary
-                  </>
-                )}
-              </button>
-            )}
+            <div className="flex gap-2">
+              {/* Explain Like a Child Button */}
+              {analysis.summary && (
+                <button
+                  onClick={handleExplainLikeChild}
+                  disabled={loadingSimple}
+                  className="flex items-center gap-2 px-4 py-2 bg-pink-500 hover:bg-pink-600 disabled:bg-zinc-700 text-white rounded-lg transition-colors border border-pink-400"
+                >
+                  {loadingSimple ? 'Thinking...' : '🧸 Explain like a child'}
+                </button>
+              )}
+
+              {analysis.summary && (
+                <button
+                  onClick={handleListenToAnalysis}
+                  disabled={isGeneratingAudio}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-700 text-white rounded-lg transition-colors"
+                >
+                  {isGeneratingAudio ? (
+                    <>
+                      <span className="animate-spin">⚙️</span>
+                      Generating Audio...
+                    </>
+                  ) : isPlaying ? (
+                    <>
+                      🔊 Playing...
+                    </>
+                  ) : (
+                    <>
+                      🎧 Listen
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Simple Explanation Box */}
+          {simpleExplanation && (
+            <div className="mb-6 bg-pink-900/20 border border-pink-500/50 p-6 rounded-xl relative overflow-hidden animate-in fade-in slide-in-from-top-4">
+              <div className="absolute top-0 left-0 p-2 opacity-10 text-6xl">🧸</div>
+              <h4 className="text-pink-300 font-bold mb-2 relative z-10 flex items-center gap-2">
+                <span className="text-2xl">👶</span> Here is the simple version:
+              </h4>
+              <p className="text-pink-100 text-lg leading-relaxed relative z-10 font-medium">
+                {simpleExplanation}
+              </p>
+              <button
+                onClick={() => setSimpleExplanation(null)}
+                className="absolute top-2 right-2 text-pink-400 hover:text-pink-200"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Audio Player */}
           {audioUrl && (
@@ -413,7 +473,7 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Scraped Clauses from Firecrawl */}
+      {/* ... keeping scraped clauses ... */}
       {uploadResult?.scraped_clauses && uploadResult.scraped_clauses.length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl mt-4">
           <h3 className="text-lg font-semibold mb-3">Related Clauses (Human-in-the-Loop suggestions)</h3>
@@ -438,6 +498,7 @@ export default function UploadPage() {
         </div>
       )}
 
+      {/* ... keeping rest of analysis items ... */}
       {analysis && !analyzing && (
         <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-6">
           <h3 className="text-2xl font-bold">Contract Analysis</h3>
